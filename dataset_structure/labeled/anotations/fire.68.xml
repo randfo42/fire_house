@@ -1,0 +1,26 @@
+<annotation>
+	<folder>fire_images</folder>
+	<filename>fire.68.png</filename>
+	<path>C:\Users\방재연\Desktop\학교쓰\불난집\image\UN_1_unano\fire_dataset\fire_images\fire.68.png</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>1024</width>
+		<height>681</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>fire</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>88</xmin>
+			<ymin>91</ymin>
+			<xmax>885</xmax>
+			<ymax>610</ymax>
+		</bndbox>
+	</object>
+</annotation>
