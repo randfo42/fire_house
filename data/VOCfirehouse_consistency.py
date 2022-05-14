@@ -5,6 +5,7 @@ https://github.com/fmassa/vision/blob/voc_dataset/torchvision/datasets/voc.py
 
 Updated by: Ellis Brown, Max deGroot
 """
+import os
 from .config import HOME
 import os.path as osp
 import sys
@@ -26,7 +27,7 @@ VOC_CLASSES = (  # always index 0
 )
 
 # note: if you used our download scripts, this should be right
-VOC_ROOT = osp.join(HOME, "data/VOCdevkit/")
+DATA_ROOT = osp.join(HOME, "data/fire/")
 
 class VOCAnnotationTransform_con(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index
@@ -69,10 +70,17 @@ class VOCAnnotationTransform_con(object):
                 # scale height or width
                 cur_pt = cur_pt / width if i % 2 == 0 else cur_pt / height
                 bndbox.append(cur_pt)
+            #print(name)
+            if name not in VOC_CLASSES:
+                print(name)
+            
             label_idx = self.class_to_ind[name]
             bndbox.append(label_idx)
             res += [bndbox]  # [xmin, ymin, xmax, ymax, label_ind]
             # img_id = target.find('filename').text[:-4]
+            
+        #if res == []:
+        #    print('errrrrrrrr')
 
         return res  # [[xmin, ymin, xmax, ymax, label_ind], ... ]
 
@@ -85,18 +93,25 @@ class VOC_firehouse_dataset_con(data.Dataset):
     self.transform = transform
     self.target_transform = target_transform
     ##self.name = dataset_name
-    self._annopath = osp.join('%s', 'anotations', '%s.xml')
-    self._imgpath = osp.join('%s', 'images', '%s.png')
+    self._annopath = osp.join(DATA_ROOT, 'annotations', '%s.xml')
+    self._imgpath = osp.join(DATA_ROOT, 'images', '%s.png')
     self.ids = list()
     self.unlabel_ids = list()
     ##rootpath = "/content"
-    for line in open("/content/meta_labeled.txt"):
+    #for line in open(DATA_ROOT+"/meta.txt"):
       ##print("line strip: ",line.strip())
-      self.ids.append(("/content/labeled" , line.strip()))
-    for line in open("/content/meta_unlabeled.txt"):
-      self.unlabel_ids.append(("/content/unlabeled" , line.strip()))
+    #  self.ids.append((DATA_ROOT+"/labeled" , line.strip()))
+    
+    
+    #for line in open("/content/meta_unlabeled.txt"):
+    #  self.unlabel_ids.append(("/content/unlabeled" , line.strip()))
     ##self.unlabel_ids = random.sample(self.unlabel_ids, 11540)
-    self.ids = self.ids + self.unlabel_ids
+    
+    self.ids = os.listdir(DATA_ROOT+'labeled_img')
+    self.unlabel_ids=os.listdir(DATA_ROOT+'unlabeled_img')
+    
+    self.ids_len = len(self.ids)
+    #self.ids = self.ids + self.unlabel_ids
 
   def __getitem__(self,index):
     im, gt, h, w, semi = self.pull_item(index)
@@ -106,24 +121,42 @@ class VOC_firehouse_dataset_con(data.Dataset):
     return len(self.ids)
   
   def pull_item(self, index):
+    
     img_id = self.ids[index]
+    
+    if index<self.ids_len:
+        img_id = self.ids[index]
+        img = cv2.imread(DATA_ROOT+'labeled_img/'+img_id)
+        semi = np.array([1])
+        target = ET.parse(self._annopath % img_id[:-4]).getroot()
 
-    if (img_id[0] == '/content/labeled'):
-      target = ET.parse(self._annopath % img_id).getroot()
-      img = cv2.imread(self._imgpath % img_id)
-      semi = np.array([1])
-    elif (img_id[0] == '/content/unlabeled'):
-      img = cv2.imread(self._imgpath % img_id)
-      target = np.zeros([1, 5])
-      semi = np.array([0])
+    else:
+        img_id = self.unlabel_ids[index-self.ids_len]
+        img = cv2.imread(DATA_ROOT+'unlabel_img/'+img_id)
+        semi = np.array([0])
+        target = np.zeros([1,5])
+
+    #if (img_id[0] == '/content/labeled'):
+    #  target = ET.parse(self._annopath % img_id).getroot()
+    #  img = cv2.imread(self._imgpath % img_id)
+    #  semi = np.array([1])
+    #elif (img_id[0] == '/content/unlabeled'):
+    #  img = cv2.imread(self._imgpath % img_id)
+    #  target = np.zeros([1, 5])
+    #  semi = np.array([0])
 
     height, width, channels = img.shape
 
     if self.target_transform is not None:
         target = self.target_transform(target, width, height)
+    
+        #print(/arget)
 
     if self.transform is not None:
         target = np.array(target)
+        if target.shape[0] ==0: 
+            print(target.shape)
+            print(img_id)
         img, boxes, labels = self.transform(img, target[:, :4], target[:, 4])
         # to rgb
         img = img[:, :, (2, 1, 0)]
