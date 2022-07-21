@@ -88,7 +88,7 @@ class COCODetection(data.Dataset):
                  target_transform=COCOAnnotationTransform(), dataset_name='MS COCO'):
 
         sys.path.append(osp.join(root, COCO_API))
-        from pycocotool.coco import COCO
+        from pycocotools.coco import COCO
         if(image_set[0:4]=='test'):
             self.root = osp.join(root, IMAGES, 'test2015')
             self.coco = COCO(osp.join(root, ANNOTATIONS, 'image_info_test-dev2015.json'))
