@@ -29,6 +29,7 @@ VOC_CLASSES = (  # always index 0
 # note: if you used our download scripts, this should be right
 #DATA_ROOT = osp.join(HOME, "data/fire/")
 VOC_ROOT = osp.join(HOME, "data/fire/")
+DATA_ROOT = osp.join(HOME, "data/fire/")
 
 class VOCAnnotationTransform_con(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index

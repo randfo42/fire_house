@@ -21,6 +21,10 @@ import math
 import copy
 from data.VOCfirehouse_consistency import VOC_firehouse_dataset_con
 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]= "6,7"
+
+
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
@@ -37,7 +41,7 @@ parser.add_argument('--dataset_root', default=VOC_ROOT,
                     help='Dataset root directory path')
 parser.add_argument('--basenet', default='vgg16_reducedfc.pth',
                     help='Pretrained base model')
-parser.add_argument('--batch_size', default=32, type=int,
+parser.add_argument('--batch_size', default=8, type=int,
                     help='Batch size for training')
 parser.add_argument('--resume', default=None, type=str,  # None  'weights/ssd300_COCO_80000.pth'
                     help='Checkpoint state_dict file to resume training from')
