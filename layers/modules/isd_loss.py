@@ -12,8 +12,9 @@ class ISDLoss(nn.Module):
         super(ISDLoss, self).__init__()
         self.use_gpu = use_gpu
 
-    def forward(self, args, lam, conf, conf_flip, loc, loc_flip, conf_shuffle, conf_interpolation, loc_shuffle, loc_interpolation, conf_consistency_criterion):
-
+    def forward(self, args, lam, conf, conf_flip, loc, loc_flip, conf_shuffle, conf_interpolation, loc_shuffle, loc_interpolation, conf_consistency_criterion, yolo=False,num_classes = 21):
+        
+        
 
         ### interpolation regularization
         # out, conf, conf_flip, loc, loc_flip, conf_shuffle, conf_interpolation, loc_shuffle, loc_interpolation
@@ -25,18 +26,42 @@ class ISDLoss(nn.Module):
         loc_temp[int(args.batch_size / 2):, :, :] = loc_shuffle[:int(args.batch_size / 2), :, :]
 
         ## original background elimination
-        left_conf_class = conf[:, :, 1:].clone()
-        left_background_score = conf[:, :, 0].clone()
-        left_each_val, left_each_index = torch.max(left_conf_class, dim=2)
-        left_mask_val = left_each_val > left_background_score
-        left_mask_val = left_mask_val.data
+        
+        
+        if yolo:
+            
+            left_conf_class = conf[:, :, :-1].clone()
+            left_background_score = conf[:, :, -1].clone()
+            left_each_val, left_each_index = torch.max(left_conf_class, dim=2)
+            left_mask_val = left_each_val > 0.5
+            left_mask_val = left_mask_val.data
 
-        ## flip background elimination
-        right_conf_class = conf_temp[:, :, 1:].clone()
-        right_background_score = conf_temp[:, :, 0].clone()
-        right_each_val, right_each_index = torch.max(right_conf_class, dim=2)
-        right_mask_val = right_each_val > right_background_score
-        right_mask_val = right_mask_val.data
+            ## flip background elimination
+            right_conf_class = conf_temp[:, :, :-1].clone()
+            right_background_score = conf_temp[:, :, -1].clone()
+            right_each_val, right_each_index = torch.max(right_conf_class, dim=2)
+            right_mask_val = right_each_val > 0.5
+            right_mask_val = right_mask_val.data
+
+            #remove confidece 
+            conf = conf[:, :, :-1].clone()
+            conf_temp = conf_temp[:, :, :-1].clone()
+            conf_interpolation = conf_interpolation[:, :, :-1].clone()
+            
+        else:
+            
+            left_conf_class = conf[:, :, 1:].clone()
+            left_background_score = conf[:, :, 0].clone()
+            left_each_val, left_each_index = torch.max(left_conf_class, dim=2)
+            left_mask_val = left_each_val > left_background_score
+            left_mask_val = left_mask_val.data
+
+            ## flip background elimination
+            right_conf_class = conf_temp[:, :, 1:].clone()
+            right_background_score = conf_temp[:, :, 0].clone()
+            right_each_val, right_each_index = torch.max(right_conf_class, dim=2)
+            right_mask_val = right_each_val > right_background_score
+            right_mask_val = right_mask_val.data
 
         ## both background elimination
         only_left_mask_val = left_mask_val.float() * (1 - right_mask_val.float())
@@ -51,15 +76,15 @@ class ISDLoss(nn.Module):
 
         intersection_left_conf_mask_sample = conf.clone()
         intersection_left_conf_sampled = intersection_left_conf_mask_sample[intersection_mask_conf_index].view(-1,
-                                                                                                               21)
+                                                                                                   num_classes)
 
         intersection_right_conf_mask_sample = conf_temp.clone()
         intersection_right_conf_sampled = intersection_right_conf_mask_sample[intersection_mask_conf_index].view(-1,
-                                                                                                                 21)
+                                                                                                      num_classes)
 
         intersection_intersection_conf_mask_sample = conf_interpolation.clone()
         intersection_intersection_sampled = intersection_intersection_conf_mask_sample[
-            intersection_mask_conf_index].view(-1, 21)
+            intersection_mask_conf_index].view(-1, num_classes)
 
         if (intersection_mask_val.sum() > 0):
 
@@ -87,13 +112,13 @@ class ISDLoss(nn.Module):
 
         ori_fixmatch_conf_mask_sample = conf.clone()
         ori_fixmatch_loc_mask_sample = loc.clone()
-        ori_fixmatch_conf_sampled = ori_fixmatch_conf_mask_sample[only_left_mask_conf_index].view(-1, 21)
+        ori_fixmatch_conf_sampled = ori_fixmatch_conf_mask_sample[only_left_mask_conf_index].view(-1, num_classes)
         ori_fixmatch_loc_sampled = ori_fixmatch_loc_mask_sample[only_left_mask_loc_index].view(-1, 4)
 
         ori_fixmatch_conf_mask_sample_interpolation = conf_interpolation.clone()
         ori_fixmatch_loc_mask_sample_interpolation = loc_interpolation.clone()
         ori_fixmatch_conf_sampled_interpolation = ori_fixmatch_conf_mask_sample_interpolation[
-            only_left_mask_conf_index].view(-1, 21)
+            only_left_mask_conf_index].view(-1, num_classes)
         ori_fixmatch_loc_sampled_interpolation = ori_fixmatch_loc_mask_sample_interpolation[
             only_left_mask_loc_index].view(-1, 4)
 
@@ -143,13 +168,13 @@ class ISDLoss(nn.Module):
 
         flip_fixmatch_conf_mask_sample = conf_temp.clone()
         flip_fixmatch_loc_mask_sample = loc_temp.clone()
-        flip_fixmatch_conf_sampled = flip_fixmatch_conf_mask_sample[only_right_mask_conf_index].view(-1, 21)
+        flip_fixmatch_conf_sampled = flip_fixmatch_conf_mask_sample[only_right_mask_conf_index].view(-1, num_classes)
         flip_fixmatch_loc_sampled = flip_fixmatch_loc_mask_sample[only_right_mask_loc_index].view(-1, 4)
 
         flip_fixmatch_conf_mask_sample_interpolation = conf_interpolation.clone()
         flip_fixmatch_loc_mask_sample_interpolation = loc_interpolation.clone()
         flip_fixmatch_conf_sampled_interpolation = flip_fixmatch_conf_mask_sample_interpolation[
-            only_right_mask_conf_index].view(-1, 21)
+            only_right_mask_conf_index].view(-1, num_classes)
         flip_fixmatch_loc_sampled_interpolation = flip_fixmatch_loc_mask_sample_interpolation[
             only_right_mask_loc_index].view(-1, 4)
 

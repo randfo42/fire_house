@@ -50,6 +50,8 @@ parser.add_argument('--batch_size', default=2, type=int,
                     help='Batch size for training')
 parser.add_argument('--beta_dis', default=100.0, type=float,
                     help='beta distribution')
+parser.add_argument('--type1coef', default=0.1, type=float,
+                    help='type1coef')
 
 # parser.add_argument('--gamma', default=0.1, type=float,
 #                     help='Gamma update for SGD')
@@ -88,6 +90,7 @@ def train(args):
     
     conf_consistency_criterion = torch.nn.KLDivLoss(size_average=False, reduce=False).cuda()
     csd_criterion = CSDLoss(True) #TODO 
+    isd_criterion = ISDLoss(True)
     
     for epoch in range(0,args.epochs):
         for data in tqdm(data_loader):
@@ -178,8 +181,13 @@ def train(args):
 
             consistency_loss = csd_criterion(args, conf_ori, conf_flip, loc_ori, loc_flip, conf_consistency_criterion,yolo=True,num_classes=80)
             consistency_loss = consistency_loss.mean()
-
-            loss = loss + consistency_loss
+            
+            interpolation_consistency_conf_loss, fixmatch_loss = isd_criterion(args, lam, conf_ori, conf_flip, loc_ori, loc_flip, conf_shuffle, conf_mix, loc_shuffle, loc_mix, conf_consistency_criterion,
+                                                                      True,num_classes=80)
+            interpolation_loss = torch.mul(interpolation_consistency_conf_loss.mean(), args.type1coef) + fixmatch_loss.mean()
+    
+            
+            loss = loss + consistency_loss + interpolation_loss
 
             optimizer.zero_grad()
             loss.backward()
