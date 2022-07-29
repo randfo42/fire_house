@@ -1,3 +1,4 @@
+from __future__ import division
 import torch.nn as nn
 
 import time
@@ -10,7 +11,7 @@ import subprocess
 import random
 import imgaug as ia
 
-from __future__ import division
+
 
 def provide_determinism(seed=42):
     random.seed(seed)

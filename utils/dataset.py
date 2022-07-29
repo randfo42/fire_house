@@ -17,15 +17,15 @@ import torchvision
 import torch.utils.data as data
 import cv2
 
-from Format import YOLO as cvtYOLO
-from Format import VOC as cvtVOC
-from smoke_augmentation import SmokeAugmentation
+from .Format import YOLO as cvtYOLO
+from .Format import VOC as cvtVOC
+from .smoke_augmentation import SmokeAugmentation
 
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 SMOKE_ID = 1.0
-DATA_ROOT = './data/fire/'
+
 
 def pad_to_square(img, pad_value):
     c, h, w = img.shape
@@ -70,9 +70,10 @@ class ImageFolder(Dataset):
 
 
 class ListDataset(Dataset):
-    def __init__(self, root, train=True, transform=None, resize=448, class_path='./fire.name.txt'):
+    def __init__(self, root = './', train=True, transform=None, resize=448, class_path='./utils/fire.name.txt'):
 
         self.root = root
+        DATA_ROOT = osp.join(root, 'data/')
         self.transform = transform
         ##self.target_transform = target_transform
         self.train = train
