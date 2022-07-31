@@ -132,8 +132,8 @@ def train(args):
             loc_ori = list()
 
             for oo in out:
-                append_conf = oo[:,:,:,:,:81].view(2,-1,81) #TODO 2 == batch size
-                append_loc = oo[:,:,:,:,81:].view(2,-1,4)
+                append_conf = oo[:,:,:,:,:5].view(2,-1,5) #TODO 2 == batch size
+                append_loc = oo[:,:,:,:,5:].view(2,-1,4)
                 conf_ori.append(append_conf)
                 loc_ori.append(append_loc)
 
@@ -147,12 +147,12 @@ def train(args):
             loc_shuffle = list()
 
             for of in out_flip:
-                conf_shuffle.append(of[:,:,:,:,:81].view(2,-1,81))  #TODO 2 == batch size
-                loc_shuffle.append(of[:,:,:,:,81:].view(2,-1,4))
+                conf_shuffle.append(of[:,:,:,:,:5].view(2,-1,5))  #TODO 2 == batch size
+                loc_shuffle.append(of[:,:,:,:,5:].view(2,-1,4))
 
-                append_conf = of[:,:,:,:,:81]
-                append_loc = of[:,:,:,:,81:]
-                append_conf = flip(append_conf,3).view(2,-1,81)
+                append_conf = of[:,:,:,:,:5]
+                append_loc = of[:,:,:,:,5:]
+                append_conf = flip(append_conf,3).view(2,-1,5)
                 append_loc = flip(append_loc,3).view(2,-1,4)
                 conf_flip.append(append_conf)
                 loc_flip.append(append_loc)
@@ -171,19 +171,19 @@ def train(args):
 
             #mixed
             for om in out_mix:
-                append_conf = om[:,:,:,:,:81].view(2,-1,81) #TODO 2 == batch size
-                append_loc = om[:,:,:,:,81:].view(2,-1,4)
+                append_conf = om[:,:,:,:,:5].view(2,-1,5) #TODO 2 == batch size
+                append_loc = om[:,:,:,:,5:].view(2,-1,4)
                 conf_mix.append(append_conf)
                 loc_mix.append(append_loc)
 
             conf_mix = torch.cat([o for o in conf_mix],dim=1)
             loc_mix = torch.cat([o for o in loc_mix],dim=1)
 
-            consistency_loss = csd_criterion(args, conf_ori, conf_flip, loc_ori, loc_flip, conf_consistency_criterion,yolo=True,num_classes=80)
+            consistency_loss = csd_criterion(args, conf_ori, conf_flip, loc_ori, loc_flip, conf_consistency_criterion,yolo=True,num_classes=4)
             consistency_loss = consistency_loss.mean()
             
             interpolation_consistency_conf_loss, fixmatch_loss = isd_criterion(args, lam, conf_ori, conf_flip, loc_ori, loc_flip, conf_shuffle, conf_mix, loc_shuffle, loc_mix, conf_consistency_criterion,
-                                                                      True,num_classes=80)
+                                                                      True,num_classes=4)
             interpolation_loss = torch.mul(interpolation_consistency_conf_loss.mean(), args.type1coef) + fixmatch_loss.mean()
     
             

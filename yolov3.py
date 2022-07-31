@@ -156,6 +156,7 @@ class YOLOLayer(nn.Module):
         super(YOLOLayer, self).__init__()
         self.num_anchors = len(anchors)
         self.num_classes = num_classes
+        #print(num_classes)
         self.mse_loss = nn.MSELoss()
         self.bce_loss = nn.BCELoss()
         self.no = num_classes + 5  # number of outputs per anchor
@@ -168,9 +169,15 @@ class YOLOLayer(nn.Module):
         self.stride = stride
 
     def forward(self, x, img_size):
-#         stride = img_size // x.size(2) #32 16 8 
-#         self.stride = stride
+        #stride = img_size // x.size(2) #32 16 8 
+        #self.stride = stride
+        #print(stride)
+        
         bs, _, ny, nx = x.shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
+        #print(x.size())
+        #print(self.num_anchors)
+       # print(self.no)
+
         x = x.view(bs, self.num_anchors, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
 
         if not self.training:  # inference
