@@ -15,6 +15,8 @@ from utils.loss import compute_loss
 import torch.utils.data
 from tqdm import tqdm
 from layers.modules import MultiBoxLoss, CSDLoss, ISDLoss
+from utils.transform import *
+from utils.dataset import *
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
@@ -69,8 +71,9 @@ def flip(x, dim):
 def train(args):
     yolo_net = load_model(args.model, args.pretrained_weights)
     
-    cfg = coco512 #TODO voc300 cfg check 
-    dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
+    # cfg = coco512 #TODO voc300 cfg check 
+    # dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
+    dataset = ListDataset(root = "./" , transform = DEFAULT_TRANSFORMS)
     net = yolo_net
     # net = torch.nn.DataParallel(yolo_net, device_ids=[0,1])
     # cudnn.benchmark = True
@@ -83,10 +86,14 @@ def train(args):
         weight_decay=args.weight_decay
     )
 
+    # data_loader =torch.utils.data.DataLoader(dataset, args.batch_size,  # TODO? batch size 
+    #                               num_workers=2,
+    #                               shuffle=True, collate_fn=detection_collate,
+    #                               pin_memory=True)
     data_loader =torch.utils.data.DataLoader(dataset, args.batch_size,  # TODO? batch size 
                                   num_workers=2,
-                                  shuffle=True, collate_fn=detection_collate,
-                                  pin_memory=True)
+                                  shuffle=True, collate_fn=dataset.collate_fn,
+                                  pin_memory=True)    
     
     conf_consistency_criterion = torch.nn.KLDivLoss(size_average=False, reduce=False).cuda()
     csd_criterion = CSDLoss(True) #TODO 
