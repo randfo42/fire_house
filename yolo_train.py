@@ -15,6 +15,8 @@ from utils.loss import compute_loss
 import torch.utils.data
 from tqdm import tqdm
 from layers.modules import MultiBoxLoss, CSDLoss, ISDLoss
+from utils.transform import *
+from utils.dataset import *
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
@@ -59,6 +61,8 @@ parser.add_argument('--type1coef', default=0.1, type=float,
 args = parser.parse_args()
 # args = parser.parse_args([])
 
+HOME = os.path.expanduser("~")
+
 def flip(x, dim):
     dim = x.dim() + dim if dim < 0 else dim
     return x[tuple(slice(None, None) if i != dim
@@ -70,9 +74,10 @@ def train(args):
     yolo_net = load_model(args.model, args.pretrained_weights)
     
     cfg = coco512 #TODO voc300 cfg check 
-    dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
+    # dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
+    dataset = ListDataset(root = HOME , transform = DEFAULT_TRANSFORMS)
     net = yolo_net
-    # net = torch.nn.DataParallel(yolo_net, device_ids=[0,1])
+    #net = torch.nn.DataParallel(yolo_net, device_ids=[0,1])
     # cudnn.benchmark = True
     net = net.cuda()
 
@@ -83,10 +88,16 @@ def train(args):
         weight_decay=args.weight_decay
     )
 
+    # data_loader =torch.utils.data.DataLoader(dataset, args.batch_size,  # TODO? batch size 
+    #                               num_workers=2,
+    #                               shuffle=True, collate_fn=detection_collate,
+    #                               pin_memory=True)
     data_loader =torch.utils.data.DataLoader(dataset, args.batch_size,  # TODO? batch size 
                                   num_workers=2,
-                                  shuffle=True, collate_fn=detection_collate,
-                                  pin_memory=True)
+                                  shuffle=True, collate_fn=dataset.collate_fn,
+                                  pin_memory=True,
+                                  drop_last = True
+                                  )    
     
     conf_consistency_criterion = torch.nn.KLDivLoss(size_average=False, reduce=False).cuda()
     csd_criterion = CSDLoss(True) #TODO 
@@ -95,21 +106,24 @@ def train(args):
     for epoch in range(0,args.epochs):
         for data in tqdm(data_loader):
 
-            images, targets,semi = data
+            images, targets, semi = data
             images  = torch.tensor(images)
 
 
             images = images.cuda()
-
+            targets = targets.cuda()
             # batch index 
-            for i,val in enumerate(targets):
-                idx = torch.ones(targets[i].size()[0],1)*i
-                targets[i] = torch.cat([idx,targets[i]],dim=1)
-            targets = torch.cat(targets).cuda()
+            #for i,val in enumerate(targets):
+            #    idx = torch.ones(targets[i].size()[0],1)*i
+            #    targets[i] = torch.cat([idx,targets[i]],dim=1)
+            #targets = torch.cat(targets).cuda()
 
             images_flip = images.clone()
             images_flip = flip(images_flip, 3)
-
+            
+            
+            #print(images.size())
+                
             images_shuffle = images_flip.clone()
             images_shuffle[:int(args.batch_size / 2), :, :, :] = images_flip[int(args.batch_size / 2):, :, :, :]
             images_shuffle[int(args.batch_size / 2):, :, :, :] = images_flip[:int(args.batch_size / 2), :, :, :]
