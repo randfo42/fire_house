@@ -73,7 +73,7 @@ class ListDataset(Dataset):
     def __init__(self, root = './', train=True, transform=None, resize=448, class_path='./utils/fire.name.txt'):
 
         self.root = root
-        DATA_ROOT = osp.join(root, 'data/')
+        DATA_ROOT = osp.join(root, 'data/fire')
         self.transform = transform
         ##self.target_transform = target_transform
         self.train = train
@@ -84,9 +84,9 @@ class ListDataset(Dataset):
         with open(class_path) as f:
             self.classes = f.read().splitlines()
 
-        self.image_dir = osp.join(DATA_ROOT, 'imgs/')
+        self.image_dir = osp.join(DATA_ROOT, 'images')
         self.annopath_dir = osp.join(DATA_ROOT, 'annotations/')
-        self.image_ids = os.listdir(self.image_dir)
+        self.image_ids = [ _ for _ in os.listdir(self.image_dir) if _.endswith('.jpg')]
         self.annotation_ids = os.listdir(self.annopath_dir)
         self.batch_count = 0
         
@@ -97,9 +97,9 @@ class ListDataset(Dataset):
         else :
             print("problem in parsing")
         self.yolo = cvtYOLO(os.path.abspath(self.class_path))
-        self.smokeAugmentation = SmokeAugmentation(root = DATA_ROOT)
-        self.smoke_dir = self.smokeAugmentation.smoke_dir
-        self.smoke_ids = os.listdir(self.smoke_dir)
+        #self.smokeAugmentation = SmokeAugmentation(root = DATA_ROOT)
+        #self.smoke_dir = self.smokeAugmentation.smoke_dir
+        #self.smoke_ids = os.listdir(self.smoke_dir)
         
     def __getitem__(self, index):
         img_id = self.image_ids[index]
@@ -110,7 +110,11 @@ class ListDataset(Dataset):
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
         ##img = cv2.imread(img_path)
         ##img = Image.open(img_path).convert('RGB')
-    
+        
+        
+        #if img is None:
+        #    print("nonetype",img_path)
+
         ### label 가져오기     
         
         if self.dict_flag is not True :
@@ -120,7 +124,7 @@ class ListDataset(Dataset):
             key = img_id[0:-4]
             target = self.data[key]
             semi = np.array([1])
-            target , img , factor = self.smoke_aug_function(target , img , 0)
+            #target , img , factor = self.smoke_aug_function(target , img , 0)
             target = np.array(target)
 
         except:
@@ -128,7 +132,7 @@ class ListDataset(Dataset):
             target = np.zeros((1,5))
   
             
-        print(img_path)
+        #print(img_path)
         h , w , c = img.shape
         current_size = (h , w)
 #         img = cv2.resize(img , (self.resize_factor, self.resize_factor))
@@ -241,9 +245,12 @@ class ListDataset(Dataset):
         #batch_count += 1
 
     # Drop invalid images
-        batch = [data for data in batch if data is not None]
-
+        #batch = [data for data in batch if data is not None]
+        
+        #print('batch_list',len(batch))
+            
         paths, imgs, bb_targets, semis, current_size = list(zip(*batch))
+        
 
     #     Selects new image size every tenth batch
     #     if self.multiscale and self.batch_count % 10 == 0:
@@ -252,9 +259,12 @@ class ListDataset(Dataset):
 
         # Resize images to input shape
         imgs = torch.stack([resize(img, self.resize_factor) for img in imgs])
+        
+        #print('imgsize',imgs.size())
 
         # Add sample index to targets
         for i, boxes in enumerate(bb_targets):
             boxes[:, 0] = i
         bb_targets = torch.cat(bb_targets, 0)
-        return paths, imgs, bb_targets, semis
+        #return paths, imgs, bb_targets, semis
+        return imgs, bb_targets, semis
