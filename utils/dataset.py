@@ -73,7 +73,7 @@ class ListDataset(Dataset):
     def __init__(self, root = './', train=True, transform=None, resize=448, class_path='./utils/fire.name.txt'):
 
         self.root = root
-        DATA_ROOT = osp.join(root, 'data/fire')
+        DATA_ROOT = osp.join(root, 'data/fire/')
         self.transform = transform
         ##self.target_transform = target_transform
         self.train = train
@@ -84,7 +84,8 @@ class ListDataset(Dataset):
         with open(class_path) as f:
             self.classes = f.read().splitlines()
 
-        self.image_dir = osp.join(DATA_ROOT, 'images')
+        self.image_dir = osp.join(DATA_ROOT, 'images/')
+        print(self.image_dir)
         self.annopath_dir = osp.join(DATA_ROOT, 'annotations/')
         self.image_ids = [ _ for _ in os.listdir(self.image_dir) if _.endswith('.jpg')]
         self.annotation_ids = os.listdir(self.annopath_dir)
