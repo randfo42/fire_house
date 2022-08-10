@@ -33,7 +33,7 @@ parser.add_argument('--dataset_root', default=VOC_ROOT,
                     help='Dataset root directory path')
 parser.add_argument("-v", "--verbose", action='store_true', help="Makes the training more verbose")
 parser.add_argument("--n_cpu", type=int, default=8, help="Number of cpu threads to use during batch generation")
-parser.add_argument("--pretrained_weights", type=str, help="Path to checkpoint file (.weights or .pth). Starts training from checkpoint model")
+parser.add_argument("--pretrained_weights", type=str,default='./weights/yolov3.weights', help="Path to checkpoint file (.weights or .pth). Starts training from checkpoint model")
 parser.add_argument("--checkpoint_interval", type=int, default=1, help="Interval of epochs between saving model weights")
 parser.add_argument("--evaluation_interval", type=int, default=1, help="Interval of epochs between evaluations on validation set")
 parser.add_argument("--multiscale_training", action="store_true", help="Allow multi-scale training")
@@ -108,7 +108,10 @@ def train(args):
 
             images, targets, semi = data
             images  = torch.tensor(images)
-
+            
+            #print(images)
+            #print(targets)
+            #print(semi)
 
             images = images.cuda()
             targets = targets.cuda()
@@ -205,10 +208,11 @@ def train(args):
 
             optimizer.zero_grad()
             loss.backward()
-
+            
 
         #TODO eval 
-
+            
+        torch.save(net.state_dict(),'./weights/yolotest.pth')
 
 if __name__ == '__main__':
     train(args)

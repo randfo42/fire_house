@@ -5,6 +5,7 @@ import numpy as np
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 
+#from .utils import xywh2xyxy_np
 from .utils import xywh2xyxy_np
 import torchvision.transforms as transforms
 
@@ -16,6 +17,10 @@ class ImgAug(object):
     def __call__(self, data):
         # Unpack data
         img, boxes = data
+        
+       
+
+
 
         # Convert xywh to xyxy
         boxes = np.array(boxes)
@@ -30,7 +35,9 @@ class ImgAug(object):
         img, bounding_boxes = self.augmentations(
             image=img,
             bounding_boxes=bounding_boxes)
+        
 
+        #print('img ag',img)
         # Clip out of image boxes
         bounding_boxes = bounding_boxes.clip_out_of_image()
 

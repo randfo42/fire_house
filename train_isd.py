@@ -124,6 +124,8 @@ def train():
     finish_flag = True
 
     while(finish_flag):
+        
+        cfg['num_classes'] = 5
         ssd_net = build_ssd_con('train', cfg['min_dim'], cfg['num_classes'])
         net = ssd_net
 
@@ -343,11 +345,13 @@ def train():
                 update_vis_plot(iteration, loss_l.data, loss_c.data,
                                 iter_plot, epoch_plot, 'append')
 
-            if iteration != 0 and (iteration+1) % 120000 == 0:
+            #if iteration != 0 and (iteration+1) % 120000 == 0:
+            if iteration != 0 and (iteration+1) % 40 == 0:
                 print('Saving state, iter:', iteration)
-                torch.save(ssd_net.state_dict(), 'weights/ssd300_COCO_' +
-                           repr(iteration+1) + '.pth')
-        # torch.save(ssd_net.state_dict(), args.save_folder + '' + args.dataset + '.pth')
+                #torch.save(ssd_net.state_dict(), 'weights/ssd300_COCO_' +
+                #           repr(iteration+1) + '.pth')
+        #torch.save(ssd_net.state_dict(), args.save_folder + '' + args.dataset + '.pth')
+        torch.save(ssd_net.state_dict(),'weights/ssd300_fire.pth') 
         print('-------------------------------\n')
         print(loss.data)
         print('-------------------------------')
