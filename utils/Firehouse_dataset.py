@@ -16,7 +16,9 @@ if sys.version_info[0] == 2:
     import xml.etree.cElementTree as ET
 else:
     import xml.etree.ElementTree as ET
- 
+    
+import torchvision.transforms as transforms
+    
 VOC_CLASSES = (  # always index 0
     'fire',
 'smoke',
@@ -30,8 +32,9 @@ VOC_CLASSES = (  # always index 0
 ####### 
 # VOC_ROOT = osp.join(HOME, "data/fire/")
 # DATA_ROOT = osp.join(HOME, "data/fire/")
-VOC_ROOT = osp.join("./", "data/")
-DATA_ROOT = osp.join("./", "data")
+
+# VOC_ROOT = osp.join("./", "data/")
+# DATA_ROOT = osp.join("./", "data")
 
 class VOCAnnotationTransform_con(object):
     """Transforms a VOC annotation into a Tensor of bbox coords and label index
@@ -90,17 +93,19 @@ class VOCAnnotationTransform_con(object):
 
 class Firehouse_dataset(data.Dataset):
 
-    def __init__(self,root,dataset_type = "VOC",voc_transform = None, yolo_transform = None):
-        self.root = root
+    def __init__(self,root,dataset_type = "VOC", transform = None):
+##        self.root = root
+        
+        ## HOME ROOT
+        self.root = HOME
+
         self.dataset_type = dataset_type
-        #DATA_ROOT = osp.join(root, 'data/fire/')
-        DATA_ROOT = osp.join(HOME, 'data/fire/')
+        DATA_ROOT = osp.join(root, 'data/fire/')
+        
 
         ##self.image_set = image_sets
-        self.voc_transform = voc_transform
-        self.voc_target_transform = VOCAnnotationTransform_con()
-        self.yolo_transform = yolo_transform
-        
+        self.voc_transform = transform
+        self.voc_target_transform = VOCAnnotationTransform_con()        
         self.yolo_target_transform = self.VOC_2_YOLO_AnnotationTransform_con
         
         self._annopath = osp.join(DATA_ROOT, 'annotations', '%s.xml')
@@ -113,20 +118,6 @@ class Firehouse_dataset(data.Dataset):
         self.annotation_ids = os.listdir(self.annopath_dir)
         self.labeled_ids = os.listdir(self.labeled_dir)
         self.unlabeled_ids = os.listdir(self.unlabeled_dir)
-        ##self.name = dataset_name
-
-    #     self.ids = list()
-    #     self.unlabel_ids = list()
-    #     ##rootpath = "/content"
-    #     #for line in open(DATA_ROOT+"/meta.txt"):
-    #       ##print("line strip: ",line.strip())
-    #     #  self.ids.append((DATA_ROOT+"/labeled" , line.strip()))
-
-
-    #     #for line in open("/content/meta_unlabeled.txt"):
-    #     #  self.unlabel_ids.append(("/content/unlabeled" , line.strip()))
-    #     ##self.unlabel_ids = random.sample(self.unlabel_ids, 11540)
-        #self.ids = self.ids + self.unlabel_ids
 
     def __getitem__(self,index):
     
@@ -135,14 +126,14 @@ class Firehouse_dataset(data.Dataset):
         _,img, gt, h, w, semi = self.pull_voc_item(index , transform = self.voc_transform)
         if(self.dataset_type == "VOC"):
             ##print(self.dataset_type)
-            return _, torch.from_numpy(img).permute(2, 0, 1), gt, semi
+            return torch.from_numpy(img).permute(2, 0, 1), gt, semi
         ## return -> img_path , img , target , semi 
         elif(self.dataset_type  == "YOLO"):
             ##print(self.dataset_type)
             yolo_gt = self.VOC_2_YOLO_AnnotationTransform_con(gt)
-            if self.yolo_transform is not None:
-                img, yolo_gt = self.yolo_transform((img, yolo_gt))
-            return _,img,yolo_gt,semi
+            
+            img, yolo_gt = self.ToTensor((img, yolo_gt))
+            return img,yolo_gt,semi
     ##return im,gt, semi
 
     def  __len__(self):
@@ -202,3 +193,14 @@ class Firehouse_dataset(data.Dataset):
             boxes[box_idx, 4] = (y2 - y1)
 
         return boxes
+
+    def ToTensor(self,data):
+
+        img, boxes = data
+        # Extract image as PyTorch tensor
+        img = transforms.ToTensor()(img)
+
+        bb_targets = torch.zeros((len(boxes), 6))
+        bb_targets[:, 1:] = transforms.ToTensor()(boxes)
+
+        return img, bb_targets
