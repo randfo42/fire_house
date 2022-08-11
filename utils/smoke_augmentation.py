@@ -5,18 +5,71 @@ from skimage.morphology import disk
 from skimage.filters import median
 import os
 import os.path as osp
+import random
+#from .config import HOME
+
+HOME = os.path.expanduser("~")
+SMOKE_ID = 1
 
 class SmokeAugmentation() :
-    def __init__ (self , root , smoke_dir = "smokes/"):
+
+    ##########3 smoke_dir = "data/fire/smokes/" , 
+    def __init__ (self , root , smoke_dir = "data/fire/smokes/" , same=False, num_patches=1,
+                mode=cv2.NORMAL_CLONE, width_bounds_pct=((0.3,0.7),(0.3,0.7)), min_object_pct=0.25, 
+                min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=None, tol=1, resize=True,
+                gamma_params=None, intensity_logistic_params=(1/6, 20),
+                resize_bounds=(0.7, 1.0), verbose=True):
         self.root = root
+        ####=======######
+        ## root = HOME 설정
+        #self.root = HOME
+        #####========#########
+
         self.smoke_dir = osp.join(root, smoke_dir)
         self.smoke_ids = os.listdir(self.smoke_dir)
+        self.same = same
+        self.num_patches = num_patches
+        self.mode=mode 
+        self.width_bounds_pct=width_bounds_pct 
+        self.min_object_pct=min_object_pct
+        self.min_overlap_pct=min_overlap_pct
+        self.shift=shift
+        self.label_mode=label_mode 
+        self.skip_background=skip_background 
+        self.tol=tol 
+        self.resize=resize
+        self.gamma_params = gamma_params
+        self.intensity_logistic_params=intensity_logistic_params
+        self.resize_bounds=resize_bounds 
+        self.verbose=verbose
+    
+    def __call__(self, data , threshold = 0):
+        
+        img , target = data
 
+        h , w , c = img.shape
+        
+        if self.search_smoke(target) is not True:
+            x = random.randint(1,100)
+            if x > threshold:
+                smoke_index = random.randint(0,len(self.smoke_ids)-1)
+                smoke_image = cv2.imread(osp.join(self.smoke_dir, self.smoke_ids[smoke_index]))
+
+                img , ((min_y , max_y),(min_x , max_x)) , factor = self.patch_ex(ima_dest = img , ima_src = smoke_image, same=self.same, num_patches=self.num_patches,
+                mode=self.mode, width_bounds_pct=self.width_bounds_pct, min_object_pct=self.min_object_pct, 
+                min_overlap_pct=self.min_overlap_pct, shift=self.shift, label_mode=self.label_mode, skip_background=self.skip_background, tol=self.tol, resize=self.resize,
+                gamma_params=self.gamma_params, intensity_logistic_params=self.intensity_logistic_params,
+                resize_bounds=self.resize_bounds, verbose=self.verbose)
+
+                new_label = [min_x/w ,min_y/h ,max_x/w ,max_y/h ,SMOKE_ID]
+                target.append(new_label)
+        return img , target
+                
     def patch_ex(self, ima_dest, ima_src, same=False, num_patches=1,
                 mode=cv2.NORMAL_CLONE, width_bounds_pct=((0.3,0.7),(0.3,0.7)), min_object_pct=0.25, 
-                min_overlap_pct=0.25, shift=False, label_mode='continuous', skip_background=None, tol=1, resize=True,
+                min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=None, tol=1, resize=True,
                 gamma_params=None, intensity_logistic_params=(1/6, 20),
-                resize_bounds=(0.7, 1.3), verbose=True):
+                resize_bounds=(0.7, 1.0), verbose=True):
     ##### 비율 조정 - factor
     
     ##### TODO - Factor -> 돌려서 나오는거 (범위 나눠놓기) label mode, 등 
@@ -236,3 +289,9 @@ class SmokeAugmentation() :
             raise ValueError("mode not supported" + str(mode))
 
         return patchex, ((coor_min_dim1, coor_max_dim1), (coor_min_dim2, coor_max_dim2)), patch_mask
+
+    def search_smoke(self,target):
+        for i in target:
+            if i[4] == 1.0:
+                return True
+        return False
