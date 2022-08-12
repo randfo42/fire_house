@@ -12,7 +12,7 @@ class ISDLoss(nn.Module):
         super(ISDLoss, self).__init__()
         self.use_gpu = use_gpu
 
-    def forward(self, args, lam, conf, conf_flip, loc, loc_flip, conf_shuffle, conf_interpolation, loc_shuffle, loc_interpolation, conf_consistency_criterion, yolo=False,num_classes = 21):
+    def forward(self, args, lam, conf, conf_flip, loc, loc_flip, conf_shuffle, conf_interpolation, loc_shuffle, loc_interpolation, conf_consistency_criterion, yolo=False,num_classes = 5):
         
         
 

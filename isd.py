@@ -35,11 +35,12 @@ class SSD_CON(nn.Module):
         self.phase = phase
         self.num_classes = num_classes
         if(size==300):
-            self.cfg = (coco, voc300)[num_classes == 21]
+            #self.cfg = (coco, voc300)[num_classes == 21]
+            self.cfg = (coco, voc300)[1]
         else:
-            self.cfg = (coco, voc512)[num_classes == 21]
+            #self.cfg = (coco, voc512)[num_classes == 21]
+            self.cfg = (coco, voc512)[1]
            
-#         print(self.cfg)
         self.priorbox = PriorBox(self.cfg)
         self.priors = Variable(self.priorbox.forward(), volatile=True)
         self.size = size

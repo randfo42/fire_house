@@ -21,6 +21,7 @@ from .Format import YOLO as cvtYOLO
 from .Format import VOC as cvtVOC
 from .smoke_augmentation import SmokeAugmentation
 
+from .transform import DEFAULT_TRANSFORMS
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -63,7 +64,7 @@ class ImageFolder(Dataset):
         if self.transform:
             img, _ = self.transform((img, boxes))
 
-        return img_path, img
+        return img_path, imga
 
     def __len__(self):
         return len(self.files)
@@ -115,7 +116,6 @@ class ListDataset(Dataset):
         
         #if img is None:
         #    print("nonetype",img_path)
-
         ### label 가져오기     
         
         if self.dict_flag is not True :
@@ -132,7 +132,6 @@ class ListDataset(Dataset):
             semi = np.array([0])
             target = np.zeros((1,5))
   
-            
         #print(img_path)
         h , w , c = img.shape
         current_size = (h , w)
@@ -144,7 +143,8 @@ class ListDataset(Dataset):
         if self.transform is not None:
             img, target = self.transform((img, target))
           
-         
+        #print('a',img)
+
         return  img_path, img, target, semi, current_size 
 
     def __len__(self):
@@ -246,7 +246,7 @@ class ListDataset(Dataset):
         #batch_count += 1
 
     # Drop invalid images
-        #batch = [data for data in batch if data is not None]
+       # batch = [data for data in batch if data is not None]
         
         #print('batch_list',len(batch))
             
@@ -269,3 +269,17 @@ class ListDataset(Dataset):
         bb_targets = torch.cat(bb_targets, 0)
         #return paths, imgs, bb_targets, semis
         return imgs, bb_targets, semis
+
+
+
+
+if __name__ == '__main__':
+
+    HOME = os.path.expanduser("~")
+
+    dataset = ListDataset(root = HOME, transform = DEFAULT_TRANSFORMS) 
+
+
+    print(dataset.__getitem__(0))
+
+
