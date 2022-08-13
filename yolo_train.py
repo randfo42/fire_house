@@ -15,8 +15,10 @@ from utils.loss import compute_loss
 import torch.utils.data
 from tqdm import tqdm
 from layers.modules import MultiBoxLoss, CSDLoss, ISDLoss
-from utils.transform import *
-from utils.dataset import *
+#from utils.transform import *
+#from utils.dataset import *
+from utils.augmentations import SSDAugmentation
+from utils.Firehouse_dataset import Firehouse_dataset
 
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
@@ -63,6 +65,34 @@ args = parser.parse_args()
 
 HOME = os.path.expanduser("~")
 
+def collate_fn(batch):
+    imgs, bb_targets, semis = list(zip(*batch))
+
+
+#     # Resize images to input shape
+    #imgs = torch.stack([resize(img, self.resize_factor) for img in imgs])
+    imgs = torch.stack([img for img in imgs])
+    semis = torch.stack([torch.from_numpy(semi) for semi in semis])
+    
+
+    for i, boxes in enumerate(bb_targets):
+         boxes[:, 0] = i
+    
+    bb_targets = torch.cat(bb_targets, 0)
+    
+    
+
+    #print('bb_____________',bb_targets)
+    #print(type(bb_targets))
+
+    #for i,val in enumerate(bb_targets):
+    #    val = torch.from_numpy(val)
+    #    idx = torch.ones(len(val),1)*i
+    #    bb_targets[i] = torch.cat([idx,val],dim=1)
+
+    return imgs, bb_targets, semis
+
+
 def flip(x, dim):
     dim = x.dim() + dim if dim < 0 else dim
     return x[tuple(slice(None, None) if i != dim
@@ -75,7 +105,8 @@ def train(args):
     
     cfg = coco512 #TODO voc300 cfg check 
     # dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
-    dataset = ListDataset(root = HOME , transform = DEFAULT_TRANSFORMS)
+    #dataset = ListDataset(root = HOME , transform = DEFAULT_TRANSFORMS)
+    dataset = Firehouse_dataset(root = HOME, dataset_type = 'YOLO', transform = SSDAugmentation(416,(104,117,123)))
     net = yolo_net
     #net = torch.nn.DataParallel(yolo_net, device_ids=[0,1])
     # cudnn.benchmark = True
@@ -94,7 +125,7 @@ def train(args):
     #                               pin_memory=True)
     data_loader =torch.utils.data.DataLoader(dataset, args.batch_size,  # TODO? batch size 
                                   num_workers=2,
-                                  shuffle=True, collate_fn=dataset.collate_fn,
+                                  shuffle=True, collate_fn = collate_fn, #collate_fn=dataset.collate_fn,
                                   pin_memory=True,
                                   drop_last = True
                                   )    
@@ -107,7 +138,7 @@ def train(args):
         for data in tqdm(data_loader):
 
             images, targets, semi = data
-            images  = torch.tensor(images)
+            #images  = torch.tensor(images)
             
             #print(images)
             #print(targets)
@@ -116,10 +147,6 @@ def train(args):
             images = images.cuda()
             targets = targets.cuda()
             # batch index 
-            #for i,val in enumerate(targets):
-            #    idx = torch.ones(targets[i].size()[0],1)*i
-            #    targets[i] = torch.cat([idx,targets[i]],dim=1)
-            #targets = torch.cat(targets).cuda()
 
             images_flip = images.clone()
             images_flip = flip(images_flip, 3)

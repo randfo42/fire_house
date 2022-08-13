@@ -18,7 +18,7 @@ else:
     import xml.etree.ElementTree as ET
     
 import torchvision.transforms as transforms
-from smoke_augmentation import SmokeAugmentation
+from .smoke_augmentation import SmokeAugmentation
 
 VOC_CLASSES = (  # always index 0
     'fire',
@@ -125,7 +125,7 @@ class Firehouse_dataset(data.Dataset):
         self.labeled_ids = os.listdir(self.labeled_dir)
         self.unlabeled_ids = os.listdir(self.unlabeled_dir)
         
-        self.smokeaug = SmokeAugmentation(root = self.root)      ## 
+#         self.smokeaug = SmokeAugmentation(root = self.root)      ## 
         self.smokeaug_flag = smokeAugmentation
     def __getitem__(self,index):
     
@@ -142,6 +142,7 @@ class Firehouse_dataset(data.Dataset):
             yolo_gt = self.VOC_2_YOLO_AnnotationTransform_con(gt)
             
             img, yolo_gt = self.ToTensor((img, yolo_gt))
+            
             return img,yolo_gt,semi
 
 
@@ -175,8 +176,8 @@ class Firehouse_dataset(data.Dataset):
             target = self.voc_target_transform(target, width, height)
             
         ## SmokeAug    
-        if (smokeaug_flag is True and labeled_flag is True ):
-            img , target = self.smokeaug((img,target))
+#         if (smokeaug_flag is True and labeled_flag is True ):
+#             img , target = self.smokeaug((img,target))
             
         if transform is not None:
             target = np.array(target)

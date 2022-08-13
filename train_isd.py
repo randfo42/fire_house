@@ -20,6 +20,7 @@ import argparse
 import math
 import copy
 from data.VOCfirehouse_consistency import VOC_firehouse_dataset_con
+from utils.Firehouse_dataset import Firehouse_dataset 
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]= "6,7"
@@ -115,7 +116,8 @@ def train():
     elif args.dataset == 'fire':
         #if args.dataset_root == DATA_ROOT:
         cfg = voc300
-        dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
+        #dataset = VOC_firehouse_dataset_con(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
+        dataset = Firehouse_dataset(root=args.dataset_root,transform=SSDAugmentation(cfg['min_dim'] ,MEANS))
 
     if args.visdom:
         import visdom
@@ -201,6 +203,7 @@ def train():
         data_loader = data.DataLoader(dataset, args.batch_size,
                                                    num_workers=args.num_workers,
                                                    shuffle=True, collate_fn=detection_collate,
+                                                   generator = torch.Generator(device='cuda'),
                                                    pin_memory=True, drop_last=True)
 
 
