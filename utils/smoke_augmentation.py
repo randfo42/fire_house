@@ -43,13 +43,14 @@ class SmokeAugmentation_SSD() :
         self.resize_bounds=resize_bounds 
         self.verbose=verbose
     
-    def __call__(self, data , threshold = 50):
+    def __call__(self, data , threshold = 0):
         
-        img , target = data
+        img , boxes , labels = data
+
 
         h , w , c = img.shape
         
-        if self.search_smoke(target) is not True:
+        if self.search_smoke(labels) is not True:
             x = random.randint(1,100)
             if x > threshold:
                 smoke_index = random.randint(0,len(self.smoke_ids)-1)
@@ -61,9 +62,11 @@ class SmokeAugmentation_SSD() :
                 gamma_params=self.gamma_params, intensity_logistic_params=self.intensity_logistic_params,
                 resize_bounds=self.resize_bounds, verbose=self.verbose)
 
-                new_label = [min_x/w ,min_y/h ,max_x/w ,max_y/h ,SMOKE_ID]
-                target.append(new_label)
-        return img , target
+                new_box = np.array([min_x/w ,min_y/h ,max_x/w ,max_y/h])
+                new_box = new_box.reshape((1,4))
+                boxes = np.append(boxes ,new_box , axis = 0)
+                labels = np.append(labels ,SMOKE_ID) 
+        return img , boxes , labels
                 
     def patch_ex(self, ima_dest, ima_src, same=False, num_patches=1,
                 mode=cv2.NORMAL_CLONE, width_bounds_pct=((0.3,0.7),(0.3,0.7)), min_object_pct=0.25, 
@@ -292,7 +295,7 @@ class SmokeAugmentation_SSD() :
 
     def search_smoke(self,target):
         for i in target:
-            if i[4] == 1.0:
+            if i == 1.0:
                 return True
         return False
 
