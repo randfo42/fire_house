@@ -6,6 +6,7 @@ from skimage.filters import median
 import os
 import os.path as osp
 import random
+from scipy.stats import mode
 #from .config import HOME
 
 HOME = os.path.expanduser("~")
@@ -16,9 +17,9 @@ class SmokeAugmentation_SSD() :
     ##########3 smoke_dir = "data/fire/smokes/" , 
     def __init__ (self , root , smoke_dir = "data/fire/smokes/" , same=False, num_patches=1,
                 mode=cv2.NORMAL_CLONE, width_bounds_pct=((0.3,0.7),(0.3,0.7)), min_object_pct=0.25, 
-                min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=(0 , 5), tol=1, resize=True,
+                min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=True, tol=1, resize=True,
                 gamma_params=None, intensity_logistic_params=(1/6, 20),
-                resize_bounds=(0.7, 1.0), verbose=True):
+                resize_bounds=(2, 5), verbose=True):
         self.root = root
         ####=======######
         ## root = HOME 설정
@@ -27,6 +28,8 @@ class SmokeAugmentation_SSD() :
 
         self.smoke_dir = osp.join(root, smoke_dir)
         self.smoke_ids = os.listdir(self.smoke_dir)
+
+        
         self.same = same
         self.num_patches = num_patches
         self.mode=mode 
@@ -36,6 +39,12 @@ class SmokeAugmentation_SSD() :
         self.shift=shift
         self.label_mode=label_mode 
         self.skip_background=skip_background 
+
+        if self.skip_background is True:
+            self.background_arr = self.get_backgound_dict(imgdir=self.smoke_dir)
+        else :
+            self.background_arr = None
+
         self.tol=tol 
         self.resize=resize
         self.gamma_params = gamma_params
@@ -54,11 +63,15 @@ class SmokeAugmentation_SSD() :
             x = random.randint(1,100)
             if x > threshold:
                 smoke_index = random.randint(0,len(self.smoke_ids)-1)
-                smoke_image = cv2.imread(osp.join(self.smoke_dir, self.smoke_ids[smoke_index]))
+                img_path = osp.join(self.smoke_dir, self.smoke_ids[smoke_index])
+                smoke_image = cv2.imread(img_path)
+                # print("smoke img : " , img_path)
+                if (self.skip_background is True) and (self.background_arr is not None):
+                    background = self.background_arr[img_path]
 
                 img , ((min_y , max_y),(min_x , max_x)) , factor = self.patch_ex(ima_dest = img , ima_src = smoke_image, same=self.same, num_patches=self.num_patches,
                 mode=self.mode, width_bounds_pct=self.width_bounds_pct, min_object_pct=self.min_object_pct, 
-                min_overlap_pct=self.min_overlap_pct, shift=self.shift, label_mode=self.label_mode, skip_background=self.skip_background, tol=self.tol, resize=self.resize,
+                min_overlap_pct=self.min_overlap_pct, shift=self.shift, label_mode=self.label_mode, skip_background=background, tol=self.tol, resize=self.resize,
                 gamma_params=self.gamma_params, intensity_logistic_params=self.intensity_logistic_params,
                 resize_bounds=self.resize_bounds, verbose=self.verbose)
 
@@ -72,7 +85,7 @@ class SmokeAugmentation_SSD() :
                 mode=cv2.NORMAL_CLONE, width_bounds_pct=((0.3,0.7),(0.3,0.7)), min_object_pct=0.25, 
                 min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=None, tol=1, resize=True,
                 gamma_params=None, intensity_logistic_params=(1/6, 20),
-                resize_bounds=(0.7, 1.0), verbose=True):
+                resize_bounds=(2, 5), verbose=True):
     ##### 비율 조정 - factor
     
     ##### TODO - Factor -> 돌려서 나오는거 (범위 나눠놓기) label mode, 등 
@@ -123,8 +136,8 @@ class SmokeAugmentation_SSD() :
         patchex = ima_dest.copy()
         coor_min_dim1, coor_max_dim1, coor_min_dim2, coor_max_dim2 = mask.shape[0] - 1, 0, mask.shape[1] - 1, 0 ### patchex의 좌표 
         if label_mode == 'continuous':
-            factor = np.random.uniform(0.6, 0.9)
-            
+            factor = np.random.uniform(0.5, 0.75)
+        
             ##factor = np.random.uniform(0.05, 0.95)
         else:
             factor = 1
@@ -291,6 +304,8 @@ class SmokeAugmentation_SSD() :
         else:
             raise ValueError("mode not supported" + str(mode))
 
+
+        # print("factor : ", factor ,"src resize : ", (new_width , new_height) , "patch size : " ,(patch_width_dim1 , patch_width_dim2))
         return patchex, ((coor_min_dim1, coor_max_dim1), (coor_min_dim2, coor_max_dim2)), patch_mask
 
     def search_smoke(self,target):
@@ -298,6 +313,39 @@ class SmokeAugmentation_SSD() :
             if i == 1.0:
                 return True
         return False
+    
+    def get_background(self,img):
+        img_mean = img.mean(axis=-1, keepdims=True)
+        h ,w , c = img_mean.shape
+        vote_pixels = []
+        np.arange(0, 1, 0.1)
+        for i in np.arange(0, 1, 0.05):
+            x = int(w * i)
+            y = int(h * i)
+            vote_pixels.append(img_mean[0][x][0])
+            vote_pixels.append(img_mean[h-1][x][0])
+            vote_pixels.append(img_mean[y][0][0])
+            vote_pixels.append(img_mean[y][w-1][0])
+        img_mode = mode(vote_pixels)[0][0]
+        img_std = np.std(vote_pixels)
+        img_mean_value = np.mean(vote_pixels)
+        return img_mean,img_mode,img_std,img_mean_value
+
+    def get_backgound_dict(self,imgdir = "./data/fire/smokes/"):
+        background_array = {}
+        img_ids = os.listdir(imgdir)
+        for img_id in img_ids:
+            arr = []
+            filepath = os.path.join(imgdir , img_id)
+            img_array = np.fromfile(filepath , np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            meaned_img,img_mode,img_std,img_mean = self.get_background(img)
+            # arr.append(filepath)
+            # arr.append([(img_mode ,img_std)])
+
+            background_array[filepath] = [(img_mode ,img_std)]
+
+        return background_array
 
 
 class SmokeAugmentation_Retina() :
@@ -305,9 +353,9 @@ class SmokeAugmentation_Retina() :
     ##########3 smoke_dir = "data/fire/smokes/" , 
     def __init__ (self , root , smoke_dir = "data/fire/smokes/" , same=False, num_patches=1,
                 mode=cv2.NORMAL_CLONE, width_bounds_pct=((0.3,0.7),(0.3,0.7)), min_object_pct=0.25, 
-                min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=(0,5), tol=1, resize=True,
+                min_overlap_pct=0.25, shift=True, label_mode='continuous', skip_background=True, tol=1, resize=True,
                 gamma_params=None, intensity_logistic_params=(1/6, 20),
-                resize_bounds=(0.7, 1.0), verbose=True):
+                resize_bounds=(2, 5), verbose=True):
         self.root = root
         ####=======######
         ## root = HOME 설정
@@ -325,6 +373,12 @@ class SmokeAugmentation_Retina() :
         self.shift=shift
         self.label_mode=label_mode 
         self.skip_background=skip_background 
+
+        if self.skip_background is True:
+            self.background_arr = self.get_backgound_dict(imgdir=self.smoke_dir)
+        else :
+            self.background_arr = None
+
         self.tol=tol 
         self.resize=resize
         self.gamma_params = gamma_params
@@ -341,16 +395,21 @@ class SmokeAugmentation_Retina() :
         if self.search_smoke(target) is not True:
             x = random.randint(1,100)
             if x > threshold:
+
                 img = img * 255.0
                 img = img.astype(np.uint8)
                 smoke_index = random.randint(0,len(self.smoke_ids)-1)
-                smoke_image = cv2.imread(osp.join(self.smoke_dir, self.smoke_ids[smoke_index]))
+                img_path = osp.join(self.smoke_dir, self.smoke_ids[smoke_index])
+                smoke_image = cv2.imread(img_path)
+
+                if (self.skip_background is True) and (self.background_arr is not None):
+                    background = self.background_arr[img_path]
                 # print(type(smoke_image),smoke_image)
                 # print("#########################3")
                 # print(type(img),img)
                 img , ((min_y , max_y),(min_x , max_x)) , factor = self.patch_ex(ima_dest = img , ima_src = smoke_image, same=self.same, num_patches=self.num_patches,
                 mode=self.mode, width_bounds_pct=self.width_bounds_pct, min_object_pct=self.min_object_pct, 
-                min_overlap_pct=self.min_overlap_pct, shift=self.shift, label_mode=self.label_mode, skip_background=self.skip_background, tol=self.tol, resize=self.resize,
+                min_overlap_pct=self.min_overlap_pct, shift=self.shift, label_mode=self.label_mode, skip_background=background, tol=self.tol, resize=self.resize,
                 gamma_params=self.gamma_params, intensity_logistic_params=self.intensity_logistic_params,
                 resize_bounds=self.resize_bounds, verbose=self.verbose)
 
@@ -418,8 +477,8 @@ class SmokeAugmentation_Retina() :
         patchex = ima_dest.copy()
         coor_min_dim1, coor_max_dim1, coor_min_dim2, coor_max_dim2 = mask.shape[0] - 1, 0, mask.shape[1] - 1, 0 ### patchex의 좌표 
         if label_mode == 'continuous':
-            factor = np.random.uniform(0.6, 0.9)
-            
+            # factor = np.random.uniform(0.6, 0.9)
+            factor = np.random.uniform(0.5, 0.75)
             ##factor = np.random.uniform(0.05, 0.95)
         else:
             factor = 1
@@ -593,3 +652,35 @@ class SmokeAugmentation_Retina() :
             if i[4] == 1.0:
                 return True
         return False
+    def get_background(self,img):
+        img_mean = img.mean(axis=-1, keepdims=True)
+        h ,w , c = img_mean.shape
+        vote_pixels = []
+        np.arange(0, 1, 0.1)
+        for i in np.arange(0, 1, 0.05):
+            x = int(w * i)
+            y = int(h * i)
+            vote_pixels.append(img_mean[0][x][0])
+            vote_pixels.append(img_mean[h-1][x][0])
+            vote_pixels.append(img_mean[y][0][0])
+            vote_pixels.append(img_mean[y][w-1][0])
+        img_mode = mode(vote_pixels)[0][0]
+        img_std = np.std(vote_pixels)
+        img_mean_value = np.mean(vote_pixels)
+        return img_mean,img_mode,img_std,img_mean_value
+
+    def get_backgound_dict(self,imgdir = "./data/fire/smokes/"):
+        background_array = {}
+        img_ids = os.listdir(imgdir)
+        for img_id in img_ids:
+            arr = []
+            filepath = os.path.join(imgdir , img_id)
+            img_array = np.fromfile(filepath , np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            meaned_img,img_mode,img_std,img_mean = self.get_background(img)
+            # arr.append(filepath)
+            # arr.append([(img_mode ,img_std)])
+
+            background_array[filepath] = [(img_mode ,img_std)]
+
+        return background_array
