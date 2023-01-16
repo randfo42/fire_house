@@ -4,20 +4,30 @@ from torchvision import transforms
 
 from retinanet import model
 from retinanet.dataloader import CSVDataset, Resizer, Normalizer
-from retinanet import csv_eval
+from retinanet import csv_eval_ffa
+import os
+from net.models import *
 
 assert torch.__version__.split('.')[0] == '1'
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+
+gps=3
+blocks=19
+dataset = 'its'
+ffa_model_dir= f'net/trained_models/{dataset}_train_ffa_{gps}_{blocks}.pk'
+
 
 def main(args=None):
     parser = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
 
-    parser.add_argument('--csv_annotations_path', help='Path to CSV annotations',default = '../data/fire_retina/fire_anno_test.csv')
+    parser.add_argument('--csv_annotations_path', help='Path to CSV annotations')
     parser.add_argument('--model_path', help='Path to model', type=str)
     parser.add_argument('--images_path',help='Path to images directory',type=str)
-    parser.add_argument('--class_list_path',help='Path to classlist csv',type=str,default = '../data/fire_retina/fire_class.csv')
+    parser.add_argument('--class_list_path',help='Path to classlist csv',type=str)
     parser.add_argument('--iou_threshold',help='IOU threshold used for evaluation',type=str, default='0.5')
     parser = parser.parse_args(args)
 
@@ -39,14 +49,21 @@ def main(args=None):
     else:
         retinanet.load_state_dict(torch.load(parser.model_path))
         retinanet = torch.nn.DataParallel(retinanet)
+    
+    ####FFA
+    ckp=torch.load(ffa_model_dir,map_location='cuda')
+    ffa_model = FFA(gps=gps,blocks=blocks)
+    ffa_model= torch.nn.DataParallel(ffa_model).cuda()#,device_ids = [0,1])
+    ffa_model.load_state_dict(ckp['model'])
+    ffa_model.eval()
 
+    
     retinanet.training = False
     retinanet.eval()
+    retinanet.module.module.freeze_bn()
 #     retinanet.module.freeze_bn()
 
-    retinanet.module.module.freeze_bn()
-
-    print(csv_eval.evaluate(dataset_val, retinanet,iou_threshold=float(parser.iou_threshold)))
+    print(csv_eval_ffa.evaluate(dataset_val, retinanet,ffa_model,iou_threshold=float(parser.iou_threshold)))
 
 
 

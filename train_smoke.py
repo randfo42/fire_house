@@ -15,11 +15,12 @@ from torch.utils.data import DataLoader
 
 from retinanet import coco_eval
 from retinanet import csv_eval
+from smoke_augmentation import SmokeAugmentation_Retina
 
 assert torch.__version__.split('.')[0] == '1'
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]= "4,5"
+os.environ["CUDA_VISIBLE_DEVICES"]= "2"
 
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
@@ -38,7 +39,9 @@ def main(args=None):
     parser.add_argument('--epochs', help='Number of epochs', type=int, default=100)
 
     parser = parser.parse_args(args)
-
+    
+    
+    
     # Create the data loaders
     if parser.dataset == 'coco':
 
@@ -49,7 +52,7 @@ def main(args=None):
                                     transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
         dataset_val = CocoDataset(parser.coco_path, set_name='val2017',
                                   transform=transforms.Compose([Normalizer(), Resizer()]))
-
+      
     elif parser.dataset == 'csv':
 
         if parser.csv_train is None:
@@ -57,9 +60,13 @@ def main(args=None):
 
         if parser.csv_classes is None:
             raise ValueError('Must provide --csv_classes when training on COCO,')
-
+        
+        
+        smoke_transform = SmokeAugmentation_Retina()
+        
+        
         dataset_train = CSVDataset(train_file=parser.csv_train, class_list=parser.csv_classes,
-                                   transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+        transform=transforms.Compose([smoke_transform,Normalizer(), Augmenter(), Resizer()]))
 
         if parser.csv_val is None:
             dataset_val = None
@@ -174,11 +181,11 @@ def main(args=None):
 
         scheduler.step(np.mean(epoch_loss))
         if epoch_num % 40 ==0:
-            torch.save(retinanet.module, '{}_retinanet_L_{}.pt'.format(parser.dataset, epoch_num))
+            torch.save(retinanet.module, '{}_retinanet_smoke_L_{}.pt'.format(parser.dataset, epoch_num))
 
     retinanet.eval()
 
-    torch.save(retinanet, 'model_final_L.pt')
+    torch.save(retinanet, 'model_final_smoke_L.pt')
 
 
 if __name__ == '__main__':

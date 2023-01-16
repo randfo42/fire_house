@@ -4,20 +4,26 @@ from torchvision import transforms
 
 from retinanet import model
 from retinanet.dataloader import CSVDataset, Resizer, Normalizer
-from retinanet import csv_eval
+from retinanet import csv_eval_after_ffa
+from net.models import *
 
 assert torch.__version__.split('.')[0] == '1'
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 
+gps=3
+blocks=19
+dataset = 'its'
+ffa_model_dir= f'net/trained_models/{dataset}_train_ffa_{gps}_{blocks}.pk'
+
 
 def main(args=None):
     parser = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
 
-    parser.add_argument('--csv_annotations_path', help='Path to CSV annotations',default = '../data/fire_retina/fire_anno_test.csv')
+    parser.add_argument('--csv_annotations_path', help='Path to CSV annotations')
     parser.add_argument('--model_path', help='Path to model', type=str)
     parser.add_argument('--images_path',help='Path to images directory',type=str)
-    parser.add_argument('--class_list_path',help='Path to classlist csv',type=str,default = '../data/fire_retina/fire_class.csv')
+    parser.add_argument('--class_list_path',help='Path to classlist csv',type=str)
     parser.add_argument('--iou_threshold',help='IOU threshold used for evaluation',type=str, default='0.5')
     parser = parser.parse_args(args)
 
@@ -26,27 +32,40 @@ def main(args=None):
     # Create the model
     #retinanet = model.resnet50(num_classes=dataset_val.num_classes(), pretrained=True)
     retinanet=torch.load(parser.model_path)
-
+    
+    retina_ffa = torch.load('./model_final_ffa_L.pt')
+    
     use_gpu = True
 
     if use_gpu:
         if torch.cuda.is_available():
             retinanet = retinanet.cuda()
+            retina_ffa = retina_ffa.cuda()
 
     if torch.cuda.is_available():
         #retinanet.load_state_dict(torch.load(parser.model_path))
         retinanet = torch.nn.DataParallel(retinanet).cuda()
+        retina_ffa = torch.nn.DataParallel(retina_ffa).cuda()
     else:
         retinanet.load_state_dict(torch.load(parser.model_path))
         retinanet = torch.nn.DataParallel(retinanet)
+    
+    ckp=torch.load(ffa_model_dir,map_location='cuda')
+    ffa_model = FFA(gps=gps,blocks=blocks)
+    ffa_model= torch.nn.DataParallel(ffa_model).cuda()#,device_ids = [0,1])
+    ffa_model.load_state_dict(ckp['model'])
+    ffa_model.eval()
 
     retinanet.training = False
     retinanet.eval()
+    retina_ffa.training = False
+    retina_ffa.eval()
 #     retinanet.module.freeze_bn()
 
     retinanet.module.module.freeze_bn()
-
-    print(csv_eval.evaluate(dataset_val, retinanet,iou_threshold=float(parser.iou_threshold)))
+    retina_ffa.module.module.freeze_bn()
+    
+    print(csv_eval_after_ffa.evaluate(dataset_val,retinanet,retina_ffa,ffa_model,iou_threshold=float(parser.iou_threshold)))
 
 
 

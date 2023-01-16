@@ -8,21 +8,32 @@ import torch
 import torch.optim as optim
 from torchvision import transforms
 
+
 from retinanet import model
 from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
-    Normalizer
+    Normalizer, UnNormalizer
 from torch.utils.data import DataLoader
 
 from retinanet import coco_eval
 from retinanet import csv_eval
+from net.models import *
+
+import cv2
+from cv2.ximgproc import guidedFilter
+import hazdesmodel
 
 assert torch.__version__.split('.')[0] == '1'
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]= "4,5"
+os.environ["CUDA_VISIBLE_DEVICES"]= "2,3"
 
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
+
+gps=3
+blocks=19
+dataset = 'its'
+ffa_model_dir= f'net/trained_models/{dataset}_train_ffa_{gps}_{blocks}.pk'
 
 
 def main(args=None):
@@ -102,7 +113,20 @@ def main(args=None):
         retinanet = torch.nn.DataParallel(retinanet).cuda()
     else:
         retinanet = torch.nn.DataParallel(retinanet)
+    
+    ####FFA
+    ckp=torch.load(ffa_model_dir,map_location='cuda')
+    ffa_model = FFA(gps=gps,blocks=blocks)
+    ffa_model= torch.nn.DataParallel(ffa_model).cuda()#,device_ids = [0,1])
+    ffa_model.load_state_dict(ckp['model'])
+    ffa_model.eval()
+#     ffa_model.to('cuda:0')
+    haze_trans= transforms.Compose([
+    transforms.Normalize(mean=[0.64, 0.6, 0.58],std=[0.14,0.15, 0.152])
+    ])
 
+    
+    
     retinanet.training = True
 
     optimizer = optim.Adam(retinanet.parameters(), lr=1e-5)
@@ -113,7 +137,9 @@ def main(args=None):
 
     retinanet.train()
     retinanet.module.freeze_bn()
-
+    
+    HazDesNet = hazdesmodel.load_HazDesNet()
+    
     print('Num training images: {}'.format(len(dataset_train)))
 
     for epoch_num in range(parser.epochs):
@@ -126,11 +152,41 @@ def main(args=None):
         for iter_num, data in enumerate(dataloader_train):
             try:
                 optimizer.zero_grad()
+                
+                image  = data['img'].float()
+                tmp_img = UnNormalizer()(image)
+                tmp_img = tmp_img.permute(0,2,3,1).numpy()
+#                 print(tmp_img.shape)
+                temp_l = []
+                for i,val in enumerate(tmp_img):
+                    guide = cv2.cvtColor(val, cv2.COLOR_RGB2GRAY)
+                    haz_des_map = HazDesNet.predict(np.expand_dims(val,axis=0)*255)
+                    
+                    haz_des_map = haz_des_map[0,:,:,0]
+                    
+                    guide = cv2.resize(guide, (haz_des_map.shape[1], haz_des_map.shape[0]))
+                    haz_des_map = guidedFilter(guide=guide, src=haz_des_map, radius=32, eps=500)
+                    des_score = np.mean(haz_des_map)
+                    
+#                     print(des_score)
+                    
+                    if des_score>0.3:
+                    #data_img = haze_trans(data['img'].cuda().float())
+                        with torch.no_grad():
+                            dehaze = ffa_model(image[i].unsqueeze(0).cuda())
 
+                    else: 
+                        dehaze = data['img'][i].unsqueeze(0).cuda().float()
+                    
+                    temp_l.append(dehaze)
+                
+                dehaze = torch.cat(temp_l,dim=0)
+                 
                 if torch.cuda.is_available():
-                    classification_loss, regression_loss = retinanet([data['img'].cuda().float(), data['annot']])
+#                     classification_loss, regression_loss = retinanet([data['img'].cuda().float(), data['annot']])
+                    classification_loss, regression_loss = retinanet([dehaze, data['annot']])
                 else:
-                    classification_loss, regression_loss = retinanet([data['img'].float(), data['annot']])
+                    classification_loss, regression_loss = retinanet([dehaze, data['annot']])
                     
                 classification_loss = classification_loss.mean()
                 regression_loss = regression_loss.mean()
@@ -174,11 +230,11 @@ def main(args=None):
 
         scheduler.step(np.mean(epoch_loss))
         if epoch_num % 40 ==0:
-            torch.save(retinanet.module, '{}_retinanet_L_{}.pt'.format(parser.dataset, epoch_num))
+            torch.save(retinanet.module, '{}_retinanet_ffad_L_{}.pt'.format(parser.dataset, epoch_num))
 
     retinanet.eval()
 
-    torch.save(retinanet, 'model_final_L.pt')
+    torch.save(retinanet, 'model_final_ffad_L.pt')
 
 
 if __name__ == '__main__':

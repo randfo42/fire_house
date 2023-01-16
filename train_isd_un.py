@@ -3,27 +3,56 @@ import collections
 import os
 
 import numpy as np
+import math
 
 import torch
 import torch.optim as optim
 from torchvision import transforms
 
-from retinanet import model
-from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
+from retinanet import model_isd_un
+from retinanet.dataloader_un import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
     Normalizer
 from torch.utils.data import DataLoader
 
 from retinanet import coco_eval
 from retinanet import csv_eval
+import gc
+
+from smoke_augmentation import SmokeAugmentation_Retina
 
 assert torch.__version__.split('.')[0] == '1'
 
+
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]= "4,5"
+os.environ["CUDA_VISIBLE_DEVICES"]= "7"
 
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 
+def flip(x, dim):
+    dim = x.dim() + dim if dim < 0 else dim
+    return x[tuple(slice(None, None) if i != dim
+             else torch.arange(x.size(i)-1, -1, -1).long()
+             for i in range(x.dim()))]
+
+def rampweight(iteration):
+    ramp_up_end = 40
+    ramp_down_start = 80
+    coef = 1
+
+    if(iteration<ramp_up_end):
+        ramp_weight = math.exp(-5 * math.pow((1 - iteration / ramp_up_end),2))
+    elif(iteration>ramp_down_start):
+        ramp_weight = math.exp(-12.5 * math.pow((1 - (40 - iteration) / 100),2))
+#        ramp_weight = math.exp(-12.5 * math.pow((1 - (120000 - iteration) / 20000),2))
+    else:
+        ramp_weight = 1  
+
+
+    if(iteration==0):
+        ramp_weight = 0
+
+    return ramp_weight * coef * 0.005 #0.05
 
 def main(args=None):
     parser = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
@@ -57,9 +86,13 @@ def main(args=None):
 
         if parser.csv_classes is None:
             raise ValueError('Must provide --csv_classes when training on COCO,')
+        
+        smoke_transform = SmokeAugmentation_Retina()
 
         dataset_train = CSVDataset(train_file=parser.csv_train, class_list=parser.csv_classes,
-                                   transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+                                   transform=transforms.Compose([smoke_transform,Normalizer(), Augmenter(), Resizer()]))
+    
+
 
         if parser.csv_val is None:
             dataset_val = None
@@ -72,6 +105,8 @@ def main(args=None):
         raise ValueError('Dataset type not understood (must be csv or coco), exiting.')
 
     sampler = AspectRatioBasedSampler(dataset_train, batch_size=2, drop_last=False)
+#     sampler = AspectRatioBasedSampler(dataset_train, batch_size=4, drop_last=False)
+
     dataloader_train = DataLoader(dataset_train, num_workers=3, collate_fn=collater, batch_sampler=sampler)
 
     if dataset_val is not None:
@@ -80,15 +115,15 @@ def main(args=None):
 
     # Create the model
     if parser.depth == 18:
-        retinanet = model.resnet18(num_classes=dataset_train.num_classes(), pretrained=True)
+        retinanet = model_isd_un.resnet18(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 34:
-        retinanet = model.resnet34(num_classes=dataset_train.num_classes(), pretrained=True)
+        retinanet = model_isd_un.resnet34(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 50:
-        retinanet = model.resnet50(num_classes=dataset_train.num_classes(), pretrained=True)
+        retinanet = model_isd_un.resnet50(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 101:
-        retinanet = model.resnet101(num_classes=dataset_train.num_classes(), pretrained=True)
+        retinanet = model_isd_un.resnet101(num_classes=dataset_train.num_classes(), pretrained=True)
     elif parser.depth == 152:
-        retinanet = model.resnet152(num_classes=dataset_train.num_classes(), pretrained=True)
+        retinanet = model_isd_un.resnet152(num_classes=dataset_train.num_classes(), pretrained=True)
     else:
         raise ValueError('Unsupported model depth, must be one of 18, 34, 50, 101, 152')
 
@@ -109,7 +144,7 @@ def main(args=None):
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
-    loss_hist = collections.deque(maxlen=500)
+    loss_hist = collections.deque(maxlen=10)
 
     retinanet.train()
     retinanet.module.freeze_bn()
@@ -124,19 +159,53 @@ def main(args=None):
         epoch_loss = []
 
         for iter_num, data in enumerate(dataloader_train):
+            torch.cuda.empty_cache()
+            gc.collect()
             try:
                 optimizer.zero_grad()
-
+                
+                images = data['img'].cuda().float()
+                
+                images_flip = images.clone()
+                images_flip = flip(images_flip, 3)
+                
+                images_shuffle = images_flip.clone()
+                images_shuffle[:int(2 / 2), :, :, :] = images_flip[int(2 / 2):, :, :, :]
+                images_shuffle[int(2 / 2):, :, :, :] = images_flip[:int(2 / 2), :, :, :]
+#                 print(images_shuffle.size())
+                lam = np.random.beta(100.0,100.0)
+                
+                images_mix = lam * images.clone() + (1 - lam) * images_shuffle.clone()
+                
+                
+#                 print('images:',images.size())
+                
                 if torch.cuda.is_available():
-                    classification_loss, regression_loss = retinanet([data['img'].cuda().float(), data['annot']])
+                    (classification_loss, regression_loss), interpolation_consistency_conf_loss, fixmatch_loss = retinanet([images, images_flip, images_mix, data['annot'], lam])
                 else:
-                    classification_loss, regression_loss = retinanet([data['img'].float(), data['annot']])
-                    
-                classification_loss = classification_loss.mean()
-                regression_loss = regression_loss.mean()
+                    raise Exception("no cuda")
 
-                loss = classification_loss + regression_loss
-
+                if classification_loss:
+                    classification_loss = classification_loss.mean()
+                    regression_loss = regression_loss.mean()
+                
+                # isd 
+                
+#                 print('inter',interpolation_consistency_conf_loss)
+#                 print('fixmatch_loss',fixmatch_loss)
+                
+                interpolation_loss = torch.mul(interpolation_consistency_conf_loss.mean(), 0.1) + fixmatch_loss.mean()
+                
+                
+                ramp_weight = rampweight(epoch_num)
+                interpolation_loss = torch.mul(interpolation_loss,ramp_weight)
+                
+                if classification_loss:
+                    loss = classification_loss + regression_loss + interpolation_loss
+                else:
+                    loss = interpolation_loss
+                
+                
                 if bool(loss == 0):
                     continue
 
@@ -146,19 +215,23 @@ def main(args=None):
 
                 optimizer.step()
 
-                loss_hist.append(float(loss))
+                loss_hist.append(float(loss.detach()))
 
-                epoch_loss.append(float(loss))
-
-                print(
-                    'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
-                        epoch_num, iter_num, float(classification_loss), float(regression_loss), np.mean(loss_hist)))
-
+                epoch_loss.append(float(loss.detach()))
+                
+                if classification_loss:
+                    print(
+                        'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
+                            epoch_num, iter_num, float(classification_loss), float(regression_loss), np.mean(loss_hist)))
+                print(f'interpolation_loss:{interpolation_loss}')
+#                 if classification_loss:
                 del classification_loss
                 del regression_loss
+                del interpolation_loss
+            
             except Exception as e:
                 print(e)
-                continue
+                break
 
         if parser.dataset == 'coco':
 
@@ -174,11 +247,11 @@ def main(args=None):
 
         scheduler.step(np.mean(epoch_loss))
         if epoch_num % 40 ==0:
-            torch.save(retinanet.module, '{}_retinanet_L_{}.pt'.format(parser.dataset, epoch_num))
+            torch.save(retinanet.module, '{}_retinanet_isd_un_smoke_L_{}.pt'.format(parser.dataset, epoch_num))
 
     retinanet.eval()
 
-    torch.save(retinanet, 'model_final_L.pt')
+    torch.save(retinanet, 'model_final_isd_un_smoke_L.pt')
 
 
 if __name__ == '__main__':
