@@ -412,14 +412,11 @@ class Normalizer(object):
 class UnNormalizer(object):
     def __init__(self, mean=None, std=None):
         if mean == None:
-#             self.mean = [0.485, 0.456, 0.406]
-            self.mean = [0.417, 0.412,0.394 ]
-            
+            self.mean = [0.485, 0.456, 0.406]
         else:
             self.mean = mean
         if std == None:
-#             self.std = [0.229, 0.224, 0.225]
-            self.std = [0.152, 0.151, 0.145]
+            self.std = [0.229, 0.224, 0.225]
         else:
             self.std = std
 

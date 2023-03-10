@@ -223,7 +223,11 @@ class CSVDataset(Dataset):
         annotations     = np.zeros((0, 5))
 
         # some images appear to miss annotations (like image with id 257034)
+#         if len(annotation_list) == 0:
+#             return annotations
         if len(annotation_list) == 0:
+            tmp = np.zeros((1, 5))
+            tmp[0,4] = -1
             return annotations
 
         # parse annotations
@@ -412,14 +416,11 @@ class Normalizer(object):
 class UnNormalizer(object):
     def __init__(self, mean=None, std=None):
         if mean == None:
-#             self.mean = [0.485, 0.456, 0.406]
-            self.mean = [0.417, 0.412,0.394 ]
-            
+            self.mean = [0.485, 0.456, 0.406]
         else:
             self.mean = mean
         if std == None:
-#             self.std = [0.229, 0.224, 0.225]
-            self.std = [0.152, 0.151, 0.145]
+            self.std = [0.229, 0.224, 0.225]
         else:
             self.std = std
 
